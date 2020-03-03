@@ -8,6 +8,7 @@ import random
 import evaluation
 import time
 from sklearn.decomposition import NMF
+import nn_similarity
 
 random.seed(0)
 
@@ -196,7 +197,7 @@ class RecommenderItemSim(Recommender):
 
 		return games_sims
 
-		## with cosine similarity
+		# # with cosine similarity
 		# for idx in g_indices:
 		# 	vec = self.feature_mat.iloc[idx]
 		# 	## calculate similarities from game to all others
@@ -205,7 +206,24 @@ class RecommenderItemSim(Recommender):
 		# ## now we have a list of similarities, find the most similar now
 		# sims_df = pd.DataFrame(sims)
 		# games_sims = sims_df.sum(axis=0).sort_values(0, ascending=False).index
-		##
+		# #
+
+
+class TorchCommender(Recommender):
+
+	def __init__(self, K):
+		super().__init__()
+		self.K = K
+
+	def train(self, dataset):
+		self.games_idx = dataset.games_idx
+		self.feature_mat = nn_similarity.main(vec_size=self.K, 
+			repeat_trips=5, epochs=10)
+
+	def generate_recommendation_core(self, user_array):
+		prod_mat = np.dot(user_array, self.feature_mat)
+		return prod_mat.reshape(-1,)
+
 
 def main():
 	evalK = 10
@@ -224,6 +242,7 @@ def main():
 		("ItemSim", RecommenderItemSim()),
 		("MatFac", RecommenderMatrixFac(K)),
 		("NMF", RecommenderNMF(K)),
+		("Torch", TorchCommender(K)),
 	]
 
 	# ## train and evaluate recommenders
