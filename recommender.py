@@ -9,6 +9,7 @@ import evaluation
 import time
 from sklearn.decomposition import NMF
 import nn_similarity
+from scipy.spatial.distance import cdist
 
 random.seed(0)
 
@@ -197,19 +198,7 @@ class RecommenderItemSim(Recommender):
 
 		return games_sims
 
-		# # with cosine similarity
-		# for idx in g_indices:
-		# 	vec = self.feature_mat.iloc[idx]
-		# 	## calculate similarities from game to all others
-		# 	# sims.append(self.feature_mat.apply(cosine_sim, axis=1, v2=vec))
-
-		# ## now we have a list of similarities, find the most similar now
-		# sims_df = pd.DataFrame(sims)
-		# games_sims = sims_df.sum(axis=0).sort_values(0, ascending=False).index
-		# #
-
-
-class TorchCommender(Recommender):
+class TorchCommenderAvgSim(Recommender):
 
 	def __init__(self, K):
 		super().__init__()
@@ -217,13 +206,66 @@ class TorchCommender(Recommender):
 
 	def train(self, dataset):
 		self.games_idx = dataset.games_idx
-		self.feature_mat = nn_similarity.main(vec_size=self.K, 
-			repeat_trips=5, epochs=10)
+		self.model, self.obj_to_idx = nn_similarity.main(vec_size=self.K, 
+			repeat_trips=1, epochs=100)
+		self.feature_mat = nn_similarity.get_sim_matrix(self.model, 
+			self.games_idx, self.obj_to_idx)
+		game_mat = nn_similarity.get_game_matrix(self.model, 
+			self.games_idx, self.obj_to_idx)
+		self.game_mat = pd.DataFrame(game_mat)
 
 	def generate_recommendation_core(self, user_array):
 		prod_mat = np.dot(user_array, self.feature_mat)
 		return prod_mat.reshape(-1,)
 
+class TorchCommenderMaxSim(TorchCommenderAvgSim):
+
+	def __init__(self, K):
+		super().__init__(K)
+
+	def generate_recommendation_core(self, user_array):
+		indices = np.argwhere(user_array[0] == 1)
+		flat_inds = indices.flatten().tolist()
+		game_matrix = self.game_mat.loc[flat_inds]
+
+		dist_mat = cdist(game_matrix, self.game_mat)
+		dists = dist_mat.min(axis=0)
+
+		games_sims = np.max(dists) - dists
+
+		return games_sims
+
+class TorchCommenderUserSGD(Recommender):
+
+	def __init__(self, K):
+		super().__init__()
+		self.K = K
+
+	def preprocess_game_list(self, game_list):
+		""" we only want the raw game ids as input."""	
+		## remove unknown games
+		game_list = [f"game_{g}" for g in game_list if g in self.games_idx]
+		return game_list
+
+	def train(self, dataset):
+		self.games_idx = dataset.games_idx
+		self.game_names = [f"game_{g}" for g in self.games_idx]
+		self.model, self.obj_to_idx = nn_similarity.main(vec_size=self.K, 
+			repeat_trips=1, epochs=50)
+		self.feature_mat = nn_similarity.get_sim_matrix(self.model, 
+			self.games_idx, self.obj_to_idx)
+		self.game_mat = nn_similarity.get_game_matrix(self.model, 
+			self.games_idx, self.obj_to_idx)
+
+	def generate_recommendation_core(self, game_list):
+		user_vec_pre = self.model.get_user_embedding()
+		nn_similarity.calc_user_embedding(self.model, game_list, 
+			self.game_names, self.obj_to_idx)
+		user_vec = self.model.get_user_embedding()
+		res = np.dot(user_vec.detach().cpu().numpy(), self.game_mat.transpose())
+		res_flat = np.reshape(res, (923))
+
+		return res_flat.reshape(-1,)
 
 def main():
 	evalK = 10
@@ -242,7 +284,9 @@ def main():
 		("ItemSim", RecommenderItemSim()),
 		("MatFac", RecommenderMatrixFac(K)),
 		("NMF", RecommenderNMF(K)),
-		("Torch", TorchCommender(K)),
+		("Torch", TorchCommenderAvgSim(K)),
+		# ("Torch", TorchCommenderMaxSim(K)),
+		# ("Torch", TorchCommenderUserSGD(K)),
 	]
 
 	# ## train and evaluate recommenders

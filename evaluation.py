@@ -30,7 +30,7 @@ def evaluate(recommender, dataset, N=1, K=25):
         user_game_ids = [int(game.id) for game in user.games]
 
         # print(f"Iterating through user {user.id} with games {user_game_ids}")
-        list_perms = gen_sublists(user_game_ids, N, 50)
+        list_perms = gen_sublists(user_game_ids, N, 3)
         for i, game_sublist in enumerate(list_perms):
             ## take all the user's games and remove those in the minor list
             game_base = set(user_game_ids) - set(game_sublist)

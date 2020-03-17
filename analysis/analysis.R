@@ -3,6 +3,7 @@ library(readr)
 library(ggplot2)
 library(jsonlite)
 
+
 ## loader data
 df <- read_delim("../data/user_games.csv", delim="\t") %>%
   rename(user_id = user_steamid, 
@@ -112,3 +113,21 @@ coocs_mat %>%
   inner_join(game_names, by=c("game_id.y" = "game_id")) %>%
   select(game1 = name.x, game2 = name.y) %>%
   View()
+
+library(datapasta)
+## copy data e.g. from Excel sheet and just paste it with CTRL + shift + V:
+df <- tibble::tribble(
+  ~syns_cnt, ~docs_cnt, ~quality_negatives, ~remove_positive_ids,
+         1L,        1L,                  0,                    0,
+         NA,        NA,                 NA,                   NA,
+         NA,        NA,                 NA,                   NA,
+         1L,        1L,                0.9,                  0.9,
+         1L,        2L,                0.9,                  0.9,
+         2L,        1L,                0.9,                  0.9,
+         2L,        2L,                0.9,                  0.9,
+         2L,        3L,                0.9,                  0.9,
+         1L,        1L,                0.9,                  0.9,
+         1L,        1L,                0.9,                  0.9,
+         1L,        1L,                0.9,                  0.9,
+         1L,        1L,                0.9,                  0.9
+  )
